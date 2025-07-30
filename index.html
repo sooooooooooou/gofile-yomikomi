@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>動画・画像再生サイト</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+
+    #drop-area {
+      border: 3px dashed #aaa;
+      border-radius: 10px;
+      width: 80%;
+      max-width: 600px;
+      height: 200px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #fff;
+      color: #555;
+      transition: border-color 0.3s, background 0.3s;
+      text-align: center;
+    }
+
+    #drop-area.dragover {
+      border-color: #00bcd4;
+      background: #e0f7fa;
+      color: #007c91;
+    }
+
+    video, img {
+      margin-top: 20px;
+      max-width: 90%;
+      max-height: 60vh;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="drop-area">ここに .mov や .mp4、画像ファイルや GoFile 直リンクをドラッグ＆ドロップ</div>
+  <video id="video" controls style="display:none"></video>
+  <img id="image" style="display:none" />
+
+  <script>
+    const dropArea = document.getElementById('drop-area');
+    const video = document.getElementById('video');
+    const image = document.getElementById('image');
+
+    dropArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropArea.classList.add('dragover');
+    });
+
+    dropArea.addEventListener('dragleave', () => {
+      dropArea.classList.remove('dragover');
+    });
+
+    dropArea.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dropArea.classList.remove('dragover');
+
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        const file = files[0];
+        const fileURL = URL.createObjectURL(file);
+        showMedia(fileURL, file.type);
+        return;
+      }
+
+      const textData = e.dataTransfer.getData('text') || e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('text/uri-list');
+      if (textData && textData.includes('gofile.io')) {
+        const match = textData.match(/gofile\.io\/d\/([a-zA-Z0-9]+)/);
+        if (!match) {
+          alert('GoFileのIDが検出できませんでした');
+          return;
+        }
+
+        const contentId = match[1];
+        try {
+          const res = await fetch(`https://api.gofile.io/getContent?contentId=${contentId}`);
+          const json = await res.json();
+
+          if (json.status !== 'ok' || !json.data || !json.data.contents) {
+            alert('GoFile APIのレスポンスが不正です');
+            return;
+          }
+
+          const contents = Object.values(json.data.contents);
+          if (contents.length === 0) {
+            alert('GoFileの中にファイルが見つかりませんでした');
+            return;
+          }
+
+          const fileObj = contents[0];
+          const fileUrl = fileObj.directLink;
+          const mimeType = fileObj.type || guessMimeType(fileUrl);
+
+          showMedia(fileUrl, mimeType);
+        } catch (err) {
+          alert('GoFile APIからファイル取得に失敗しました');
+        }
+      }
+    });
+
+    function guessMimeType(url) {
+      if (url.match(/\.mp4$|\.mov$/i)) return 'video/mp4';
+      if (url.match(/\.jpe?g$/i)) return 'image/jpeg';
+      if (url.match(/\.png$/i)) return 'image/png';
+      if (url.match(/\.gif$/i)) return 'image/gif';
+      return '';
+    }
+
+    function showMedia(url, type = '') {
+      video.style.display = 'none';
+      image.style.display = 'none';
+      if (type.startsWith('video/') || url.match(/\.mp4$|\.mov$/i)) {
+        video.src = url;
+        video.style.display = 'block';
+        video.load();
+        video.play();
+      } else if (type.startsWith('image/') || url.match(/\.jpe?g$|\.png$|\.gif$/i)) {
+        image.src = url;
+        image.style.display = 'block';
+      } else {
+        alert('対応していない形式です');
+      }
+    }
+  </script>
+
+</body>
+</html>
